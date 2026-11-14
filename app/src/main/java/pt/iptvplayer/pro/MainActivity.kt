@@ -131,27 +131,29 @@ fun IPTVApp() {
         mutableStateOf(if (userInput.isNotBlank()) AppScreen.DASHBOARD else AppScreen.LOGIN)
     }
     var previousScreen by remember { mutableStateOf(AppScreen.DASHBOARD) }
-    var currentMode by remember { mutableStateOf("live") } // "live", "vod", "series"
+    var currentMode by remember { mutableStateOf("live") }
     var isFullScreen by remember { mutableStateOf(false) }
 
     var statusText by remember { mutableStateOf("Pronto.") }
     var isLoadingGlobal by remember { mutableStateOf(false) }
+    
     val isRefreshingSection = remember {
-        mutableStateMapOf("live" to false, "vod" to false, "series" to false)
+        mutableStateMapOf<String, Boolean>("live" to false, "vod" to false, "series" to false)
     }
 
     val categoriesMap = remember {
-        mutableStateMapOf(
+        mutableStateMapOf<String, List<CategoryItem>>(
             "live" to listOf(CategoryItem("ALL", "Todas")),
             "vod" to listOf(CategoryItem("ALL", "Todas")),
             "series" to listOf(CategoryItem("ALL", "Todas"))
         )
     }
+    
     val streamsMap = remember {
-        mutableStateMapOf(
-            "live" to emptyList<StreamItem>(),
-            "vod" to emptyList<StreamItem>(),
-            "series" to emptyList<StreamItem>()
+        mutableStateMapOf<String, List<StreamItem>>(
+            "live" to emptyList(),
+            "vod" to emptyList(),
+            "series" to emptyList()
         )
     }
 
@@ -269,7 +271,7 @@ fun IPTVApp() {
 
         scope.launch {
             isLoadingGlobal = true
-            statusText = "A carregar itens da categoria..."
+            statusText = "A carregar itens..."
             try {
                 val url = "$baseServer/player_api.php?username=$activeUser&password=$activePass&action=$action&category_id=$catId"
                 val body = httpGet(url)
@@ -299,16 +301,15 @@ fun IPTVApp() {
                 }
                 val existingFiltered = streamsMap[mode].orEmpty().filterNot { it.catId == catId }
                 streamsMap[mode] = existingFiltered + newItems
-                statusText = "Categoria atualizada (${newItems.size} itens)."
+                statusText = "Categoria carregada."
             } catch (e: Exception) {
-                statusText = "Erro ao carregar categoria: ${e.message}"
+                statusText = "Erro: ${e.message}"
             } finally {
                 isLoadingGlobal = false
             }
         }
     }
 
-    // Atualizar apenas uma secção específica (botão de refresh na vinheta do Dashboard)
     fun refreshSingleSection(section: String) {
         val norm = normalizeCredentials(serverInput, userInput, passInput)
         baseServer = norm[0]
@@ -357,9 +358,9 @@ fun IPTVApp() {
                     val m3uText = httpGet(m3uUrl)
                     parseM3uContent(m3uText, filterSection = section)
                 }
-                statusText = "${section.uppercase()} atualizado com sucesso!"
+                statusText = "${section.uppercase()} atualizado!"
             } catch (e: Exception) {
-                statusText = "Erro ao atualizar $section: ${e.message}"
+                statusText = "Erro: ${e.message}"
             } finally {
                 isRefreshingSection[section] = false
             }
@@ -382,7 +383,7 @@ fun IPTVApp() {
 
         scope.launch {
             isLoadingGlobal = true
-            statusText = "A autenticar e sincronizar fontes..."
+            statusText = "A autenticar..."
             try {
                 val norm = normalizeCredentials(serverInput, userInput, passInput)
                 baseServer = norm[0]
@@ -431,19 +432,18 @@ fun IPTVApp() {
                     parseM3uContent(m3uText)
                 }
 
-                statusText = "Conta sincronizada com sucesso!"
+                statusText = "Conta ligada!"
                 if (navigateToDashboard) {
                     currentScreen = AppScreen.DASHBOARD
                 }
             } catch (e: Exception) {
-                statusText = "Erro de ligação: ${e.message}"
+                statusText = "Erro: ${e.message}"
             } finally {
                 isLoadingGlobal = false
             }
         }
     }
 
-    // Carregar automaticamente se já houver conta guardada ao abrir a app
     LaunchedEffect(Unit) {
         if (userInput.isNotBlank() && baseServer.isBlank()) {
             startAccountLogin(navigateToDashboard = false)
@@ -469,7 +469,7 @@ fun IPTVApp() {
         activeIndex = -1
         currentPlayingTitle = "Nenhum fluxo ativo"
         isFullScreen = false
-        statusText = "Sessão terminada. Insere uma nova conta."
+        statusText = "Sessão terminada."
         currentScreen = AppScreen.LOGIN
     }
 
@@ -490,8 +490,8 @@ fun IPTVApp() {
             } catch (e: Exception) {
                 try {
                     context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("vlc://${item.url}")))
-                } catch (ex: Exception) {
-                    statusText = "App VLC não encontrada."
+                } catch (_: Exception) {
+                    statusText = "VLC não encontrado."
                 }
             }
             return
@@ -512,7 +512,7 @@ fun IPTVApp() {
     fun loadSeriesEpisodes(seriesId: String, seriesName: String) {
         scope.launch {
             isLoadingGlobal = true
-            statusText = "A carregar episódios de $seriesName..."
+            statusText = "A carregar episódios..."
             try {
                 val url = "$baseServer/player_api.php?username=$activeUser&password=$activePass&action=get_series_info&series_id=$seriesId"
                 val body = httpGet(url)
@@ -546,7 +546,7 @@ fun IPTVApp() {
                 viewingSeriesEpisodes = true
                 statusText = "${loadedEps.size} episódios carregados."
             } catch (e: Exception) {
-                statusText = "Erro ao carregar episódios: ${e.message}"
+                statusText = "Erro: ${e.message}"
             } finally {
                 isLoadingGlobal = false
             }
@@ -568,7 +568,6 @@ fun IPTVApp() {
         currentScreen = AppScreen.PLAYER
     }
 
-    // Gestão inteligente do botão Back do Android
     BackHandler(enabled = currentScreen != AppScreen.DASHBOARD && currentScreen != AppScreen.LOGIN) {
         when {
             isFullScreen -> isFullScreen = false
@@ -578,7 +577,6 @@ fun IPTVApp() {
         }
     }
 
-    // --- NAVEGAÇÃO DE ECRÃS ---
     when (currentScreen) {
         AppScreen.LOGIN -> {
             Column(
@@ -600,7 +598,7 @@ fun IPTVApp() {
                 }
                 Spacer(modifier = Modifier.height(12.dp))
                 Text("IPTV Player Pro", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
-                Text("Inicia sessão com a tua conta Xtream Codes ou M3U", fontSize = 13.sp, color = Color(0xFF8A94A6))
+                Text("Inicia sessão", fontSize = 13.sp, color = Color(0xFF8A94A6))
                 Spacer(modifier = Modifier.height(24.dp))
 
                 Card(
@@ -653,7 +651,7 @@ fun IPTVApp() {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Switch(checked = saveCreds, onCheckedChange = { saveCreds = it })
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Guardar dados", fontSize = 13.sp)
+                                Text("Guardar", fontSize = 13.sp)
                             }
                             Button(
                                 onClick = { startAccountLogin(navigateToDashboard = true) },
@@ -683,7 +681,6 @@ fun IPTVApp() {
                     .verticalScroll(rememberScrollState())
                     .padding(16.dp)
             ) {
-                // Cabeçalho do Ecrã Inicial
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -703,22 +700,20 @@ fun IPTVApp() {
                         Column {
                             Text("IPTV Player Pro", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
                             Text(
-                                text = if (activeUser.isNotBlank()) "Conta: $activeUser" else "Servidor ligado",
+                                text = if (activeUser.isNotBlank()) "Conta: $activeUser" else "Ligado",
                                 fontSize = 12.sp,
                                 color = Color(0xFF8A94A6)
                             )
                         }
                     }
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilledTonalIconButton(
-                            onClick = {
-                                previousScreen = AppScreen.DASHBOARD
-                                currentScreen = AppScreen.SETTINGS
-                            }
-                        ) {
-                            Icon(Icons.Default.Settings, contentDescription = "Opções", tint = Color.White)
+                    FilledTonalIconButton(
+                        onClick = {
+                            previousScreen = AppScreen.DASHBOARD
+                            currentScreen = AppScreen.SETTINGS
                         }
+                    ) {
+                        Icon(Icons.Default.Settings, contentDescription = "Opções", tint = Color.White)
                     }
                 }
 
@@ -726,7 +721,6 @@ fun IPTVApp() {
                 Text(statusText, fontSize = 12.sp, color = Color(0xFF0091FF))
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // 3 Vinhetas Principais com botão de Refresh no canto inferior direito
                 val cardsData = listOf(
                     Triple("live", "TV ao Vivo", Icons.Default.LiveTv),
                     Triple("vod", "Filmes", Icons.Default.Movie),
@@ -762,7 +756,7 @@ fun IPTVApp() {
                                     .height(145.dp),
                                 modeKey = modeKey,
                                 title = title,
-                                subtitle = "${(categoriesMap[modeKey]?.size ?: 1) - 1} categorias disponíveis",
+                                subtitle = "${(categoriesMap[modeKey]?.size ?: 1) - 1} categorias",
                                 icon = icon,
                                 isRefreshing = isRefreshingSection[modeKey] == true,
                                 onOpen = { openSectionFromDashboard(modeKey) },
@@ -775,7 +769,6 @@ fun IPTVApp() {
         }
 
         AppScreen.SETTINGS -> {
-            // Menu de Opções totalmente acessível na vertical (com verticalScroll) e na horizontal
             var editSourcesExpanded by remember { mutableStateOf(false) }
 
             Column(
@@ -797,7 +790,6 @@ fun IPTVApp() {
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // 1. Botão para Editar as Fontes
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
@@ -810,7 +802,7 @@ fun IPTVApp() {
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("Fontes de IPTV (Servidor / M3U)", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color.White)
+                                Text("Editar Fontes (Servidor / M3U)", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color.White)
                                 Text(serverInput, fontSize = 12.sp, color = Color(0xFF8A94A6), maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                             Button(
@@ -820,7 +812,7 @@ fun IPTVApp() {
                             ) {
                                 Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text(if (editSourcesExpanded) "Fechar" else "Editar Fontes")
+                                Text(if (editSourcesExpanded) "Fechar" else "Editar")
                             }
                         }
 
@@ -829,7 +821,7 @@ fun IPTVApp() {
                             OutlinedTextField(
                                 value = serverInput,
                                 onValueChange = { serverInput = it },
-                                label = { Text("URL do Servidor ou Lista M3U") },
+                                label = { Text("URL Servidor / M3U") },
                                 singleLine = true,
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(12.dp)
@@ -870,7 +862,7 @@ fun IPTVApp() {
                             ) {
                                 Icon(Icons.Default.Save, contentDescription = null)
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Guardar e Recarregar Fonte", fontWeight = FontWeight.Bold)
+                                Text("Guardar e Atualizar", fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -878,7 +870,6 @@ fun IPTVApp() {
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // 2. Preferências de Reprodução
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
@@ -893,7 +884,7 @@ fun IPTVApp() {
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text("Reprodutor VLC Externo", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color.White)
-                            Text("Abrir canais e filmes diretamente na aplicação VLC", fontSize = 12.sp, color = Color(0xFF8A94A6))
+                            Text("Abrir fluxos no app VLC", fontSize = 12.sp, color = Color(0xFF8A94A6))
                         }
                         Switch(
                             checked = useExternalVlc,
@@ -907,20 +898,15 @@ fun IPTVApp() {
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // 3. Botão de Logout (Terminar Sessão e Entrar noutra Conta)
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF2A1215))
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Sessão da Conta", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color(0xFFFF6B6B))
+                        Text("Terminar Sessão", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color(0xFFFF6B6B))
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            "Termina a sessão atual para limpar os dados guardados e entrar com outra conta IPTV.",
-                            fontSize = 12.sp,
-                            color = Color(0xFFE0B4B4)
-                        )
+                        Text("Sair da conta atual e entrar noutra.", fontSize = 12.sp, color = Color(0xFFE0B4B4))
                         Spacer(modifier = Modifier.height(12.dp))
                         Button(
                             onClick = { performLogout() },
@@ -930,7 +916,7 @@ fun IPTVApp() {
                         ) {
                             Icon(Icons.Default.Logout, contentDescription = null, tint = Color.White)
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Logout / Mudar de Conta", fontWeight = FontWeight.Bold, color = Color.White)
+                            Text("Logout / Mudar Conta", fontWeight = FontWeight.Bold, color = Color.White)
                         }
                     }
                 }
@@ -947,7 +933,6 @@ fun IPTVApp() {
                 }
             }
 
-            // Reprodutor de Vídeo com suporte a 1 clique para Full Screen e Swipe em Live TV
             @Composable
             fun VideoPlayerBox(modifier: Modifier = Modifier) {
                 var accumulatedDrag by remember { mutableStateOf(0f) }
@@ -957,10 +942,7 @@ fun IPTVApp() {
                         .background(Color.Black)
                         .pointerInput(currentMode, isFullScreen, activePlaylist) {
                             detectTapGestures(
-                                onTap = {
-                                    // 1 clique na zona de transmissão alterna Full Screen
-                                    isFullScreen = !isFullScreen
-                                }
+                                onTap = { isFullScreen = !isFullScreen }
                             )
                         }
                         .pointerInput(currentMode, activePlaylist) {
@@ -972,13 +954,8 @@ fun IPTVApp() {
                                         accumulatedDrag += dragAmount
                                     },
                                     onDragEnd = {
-                                        if (accumulatedDrag > 90f) {
-                                            // Swipe para a direita -> Canal anterior
-                                            stepChannel(-1)
-                                        } else if (accumulatedDrag < -90f) {
-                                            // Swipe para a esquerda -> Canal seguinte
-                                            stepChannel(1)
-                                        }
+                                        if (accumulatedDrag > 90f) stepChannel(-1)
+                                        else if (accumulatedDrag < -90f) stepChannel(1)
                                         accumulatedDrag = 0f
                                     }
                                 )
@@ -989,7 +966,7 @@ fun IPTVApp() {
                         factory = { ctx ->
                             PlayerView(ctx).apply {
                                 player = exoPlayer
-                                useController = false // Desativado para permitir o clique único de Full Screen e o Swipe limpos
+                                useController = false
                                 layoutParams = FrameLayout.LayoutParams(
                                     ViewGroup.LayoutParams.MATCH_PARENT,
                                     ViewGroup.LayoutParams.MATCH_PARENT
@@ -999,7 +976,6 @@ fun IPTVApp() {
                         modifier = Modifier.fillMaxSize()
                     )
 
-                    // Overlay discreto no topo do vídeo com nome do canal e botões rápidos
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1024,7 +1000,7 @@ fun IPTVApp() {
                             )
                             if (currentMode == "live") {
                                 Text(
-                                    text = "Desliza (Swipe) para mudar de canal • Toca para ${if (isFullScreen) "sair do" else "modo"} Ecrã Inteiro",
+                                    text = "Swipe para mudar canal • Toca para ecrã inteiro",
                                     color = Color(0xFFB0BAC9),
                                     fontSize = 10.sp
                                 )
@@ -1032,27 +1008,25 @@ fun IPTVApp() {
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             IconButton(onClick = { stepChannel(-1) }, modifier = Modifier.size(32.dp)) {
-                                Icon(Icons.Default.SkipPrevious, contentDescription = "Anterior", tint = Color.White)
+                                Icon(Icons.Default.SkipPrevious, contentDescription = null, tint = Color.White)
                             }
                             IconButton(
-                                onClick = {
-                                    if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
-                                },
+                                onClick = { if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play() },
                                 modifier = Modifier.size(32.dp)
                             ) {
                                 Icon(
                                     if (exoPlayer.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                    contentDescription = "Play/Pause",
+                                    contentDescription = null,
                                     tint = Color.White
                                 )
                             }
                             IconButton(onClick = { stepChannel(1) }, modifier = Modifier.size(32.dp)) {
-                                Icon(Icons.Default.SkipNext, contentDescription = "Seguinte", tint = Color.White)
+                                Icon(Icons.Default.SkipNext, contentDescription = null, tint = Color.White)
                             }
                             IconButton(onClick = { isFullScreen = !isFullScreen }, modifier = Modifier.size(32.dp)) {
                                 Icon(
                                     if (isFullScreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
-                                    contentDescription = "Ecrã Inteiro",
+                                    contentDescription = null,
                                     tint = Color.White
                                 )
                             }
@@ -1062,13 +1036,9 @@ fun IPTVApp() {
             }
 
             if (isFullScreen) {
-                // MODO FULL SCREEN TOTAL
                 VideoPlayerBox(modifier = Modifier.fillMaxSize())
             } else if (isLandscape) {
-                // MODO HORIZONTAL (SPLIT-VIEW):
-                // Esquerda: Submenu vertical de categorias e canais | Centro + Direita unidos: Transmissão do fluxo
                 Row(modifier = Modifier.fillMaxSize()) {
-                    // Painel Esquerdo (Submenu vertical com categorias e lista de canais/fluxos)
                     Column(
                         modifier = Modifier
                             .weight(0.38f)
@@ -1076,18 +1046,14 @@ fun IPTVApp() {
                             .background(Color(0xFF10141C))
                             .padding(10.dp)
                     ) {
-                        // Topo do menu esquerdo
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                IconButton(
-                                    onClick = { currentScreen = AppScreen.DASHBOARD },
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Icon(Icons.Default.Home, contentDescription = "Início", tint = Color(0xFF0091FF))
+                                IconButton(onClick = { currentScreen = AppScreen.DASHBOARD }, modifier = Modifier.size(32.dp)) {
+                                    Icon(Icons.Default.Home, contentDescription = null, tint = Color(0xFF0091FF))
                                 }
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
@@ -1108,13 +1074,12 @@ fun IPTVApp() {
                                 },
                                 modifier = Modifier.size(32.dp)
                             ) {
-                                Icon(Icons.Default.Settings, contentDescription = "Opções", tint = Color.White)
+                                Icon(Icons.Default.Settings, contentDescription = null, tint = Color.White)
                             }
                         }
 
                         Spacer(modifier = Modifier.height(6.dp))
 
-                        // Pesquisa compacta
                         OutlinedTextField(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
@@ -1127,7 +1092,6 @@ fun IPTVApp() {
 
                         Spacer(modifier = Modifier.height(6.dp))
 
-                        // Categorias deslizáveis
                         if (!viewingSeriesEpisodes && currentCategories.isNotEmpty()) {
                             LazyRow(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -1153,7 +1117,6 @@ fun IPTVApp() {
                             }
                         }
 
-                        // Lista vertical de canais / episódios no submenu esquerdo
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
                             verticalArrangement = Arrangement.spacedBy(5.dp)
@@ -1173,7 +1136,7 @@ fun IPTVApp() {
                                         ) {
                                             Icon(Icons.Default.ArrowBack, contentDescription = null, tint = Color(0xFFFF8800))
                                             Spacer(modifier = Modifier.width(8.dp))
-                                            Text("Voltar ($currentSeriesTitle)", color = Color(0xFFFF8800), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                            Text("Voltar", color = Color(0xFFFF8800), fontWeight = FontWeight.Bold, fontSize = 12.sp)
                                         }
                                     }
                                 }
@@ -1209,7 +1172,6 @@ fun IPTVApp() {
                         }
                     }
 
-                    // Frame Central e Direita Unificadas (Exibição do Fluxo)
                     Box(
                         modifier = Modifier
                             .weight(0.62f)
@@ -1221,7 +1183,6 @@ fun IPTVApp() {
                     }
                 }
             } else {
-                // MODO VERTICAL (PORTRAIT)
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -1234,7 +1195,7 @@ fun IPTVApp() {
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             IconButton(onClick = { currentScreen = AppScreen.DASHBOARD }) {
-                                Icon(Icons.Default.ArrowBack, contentDescription = "Início", tint = Color.White)
+                                Icon(Icons.Default.ArrowBack, contentDescription = null, tint = Color.White)
                             }
                             Text(
                                 text = when (currentMode) {
@@ -1253,7 +1214,7 @@ fun IPTVApp() {
                                 currentScreen = AppScreen.SETTINGS
                             }
                         ) {
-                            Icon(Icons.Default.Settings, contentDescription = "Opções", tint = Color.White)
+                            Icon(Icons.Default.Settings, contentDescription = null, tint = Color.White)
                         }
                     }
 
@@ -1324,7 +1285,7 @@ fun IPTVApp() {
                                     ) {
                                         Icon(Icons.Default.ArrowBack, contentDescription = null, tint = Color(0xFFFF8800))
                                         Spacer(modifier = Modifier.width(8.dp))
-                                        Text("Voltar às Séries ($currentSeriesTitle)", color = Color(0xFFFF8800), fontWeight = FontWeight.Bold)
+                                        Text("Voltar às Séries", color = Color(0xFFFF8800), fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }
@@ -1407,7 +1368,6 @@ fun DashboardVignetteCard(
                 Text(subtitle, fontSize = 12.sp, color = Color.White.copy(alpha = 0.8f))
             }
 
-            // Botão de Refresh individual no canto inferior direito de cada vinheta
             FilledTonalIconButton(
                 onClick = onRefresh,
                 modifier = Modifier
@@ -1426,7 +1386,7 @@ fun DashboardVignetteCard(
                 } else {
                     Icon(
                         imageVector = Icons.Default.Refresh,
-                        contentDescription = "Atualizar $title",
+                        contentDescription = "Atualizar",
                         tint = Color.White
                     )
                 }

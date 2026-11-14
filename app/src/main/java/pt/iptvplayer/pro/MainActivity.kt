@@ -1,4 +1,4 @@
-package com.micka.iptvpro
+package pt.iptvplayer.pro
 
 import android.content.Context
 import android.content.Intent

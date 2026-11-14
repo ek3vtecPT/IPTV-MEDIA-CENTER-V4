@@ -1,0 +1,96 @@
+name: Compilar APK
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  workflow_dispatch:          # permite correr à mão no separador Actions
+
+permissions:
+  contents: write             # necessário para publicar a Release com o APK
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Nenhum processo fica em segundo plano nem à espera de resposta no terminal
+  GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.parallel=false"
+  TERM: dumb
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Obter o código
+        uses: actions/checkout@v6
+
+      # Evita "No space left on device": remove ferramentas pesadas que não usamos
+      - name: Libertar espaço em disco
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/share/swift /usr/local/share/boost \
+            /usr/local/.ghcup /opt/ghc /opt/hostedtoolcache/CodeQL \
+            /usr/local/lib/android/sdk/ndk || true
+          sudo apt-get clean || true
+          df -h /
+
+      - name: Instalar JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # Evita "Exit code 143 / OOM Kill": limites de RAM também ao nível do utilizador
+      - name: Limites seguros de memória do Gradle
+        run: |
+          mkdir -p "$HOME/.gradle"
+          {
+            echo "org.gradle.jvmargs=-Xmx3072m -XX:MaxMetaspaceSize=1024m -Dfile.encoding=UTF-8"
+            echo "org.gradle.daemon=false"
+            echo "org.gradle.parallel=false"
+            echo "org.gradle.workers.max=2"
+            echo "kotlin.daemon.jvmargs=-Xmx1536m"
+            echo "kotlin.incremental=false"
+          } >> "$HOME/.gradle/gradle.properties"
+          cat "$HOME/.gradle/gradle.properties"
+
+      # Aceita as licenças do SDK sem perguntar (evita prompts / EOFError)
+      - name: Aceitar licenças do Android SDK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" --licenses > /dev/null 2>&1 || true
+
+      - name: Instalar Gradle 8.7
+        uses: gradle/actions/setup-gradle@v5
+        with:
+          gradle-version: '8.7'
+          cache-disabled: true
+
+      - name: Compilar APK de depuração
+        run: gradle assembleDebug --no-daemon --console=plain --stacktrace
+
+      - name: Preparar o APK
+        run: |
+          APK=$(ls app/build/outputs/apk/debug/*.apk | head -n 1)
+          cp "$APK" IPTVPlayerPro.apk
+          ls -lh IPTVPlayerPro.apk
+
+      - name: Guardar o APK
+        uses: actions/upload-artifact@v6
+        with:
+          name: IPTVPlayerPro-apk
+          path: IPTVPlayerPro.apk
+          if-no-files-found: error
+
+      # Só quando crias uma tag "v..." (ex.: v2.0.0): publica na página de Releases
+      - name: Publicar Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" IPTVPlayerPro.apk \
+            --title "IPTV Player Pro $GITHUB_REF_NAME" \
+            --notes "APK de depuração gerado automaticamente." \
+          || gh release upload "$GITHUB_REF_NAME" IPTVPlayerPro.apk --clobber

@@ -34,11 +34,8 @@ jobs:
         with:
           gradle-version: '8.7'
 
-      - name: Gerar Estrutura Android Nativa
+      - name: Gerar Ficheiros de Configuracao Gradle
         run: |
-          mkdir -p app/src/main/java/com/micka/iptvpro
-          cp MainActivity.kt app/src/main/java/com/micka/iptvpro/MainActivity.kt
-
           cat << 'EOF' > settings.gradle.kts
           pluginManagement {
               repositories {
@@ -80,11 +77,11 @@ jobs:
           }
 
           android {
-              namespace = "com.micka.iptvpro"
+              namespace = "pt.iptvplayer.pro"
               compileSdk = 34
 
               defaultConfig {
-                  applicationId = "com.micka.iptvpro"
+                  applicationId = "pt.iptvplayer.pro"
                   minSdk = 24
                   targetSdk = 34
                   versionCode = 2
